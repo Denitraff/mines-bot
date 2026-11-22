@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Генератор клеток Mines</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: игровой, ночной, спокойный и честный
+   IDEA: само игровое поле Mines 5×5 в той же оправе, что и в игре
+   PICTURE: большое поле с бирюзовыми плитками и оранжевыми звёздами
+   COLOUR and TYPE: глубокий синий фон, бирюза #1f9fb8, оранжевый #f08a2c; Unbounded + Manrope
+   LAYOUT: заголовок, поле крупно, справа (снизу на телефоне) настройки, шанс и таблица */
+:root{color-scheme:dark;--bg:#0d1224;--panel:#121a33;--line:#24335a;--ink:#e8eefc;--mute:#93a2c7;--teal:#1f9fb8;--teal2:#137189;--or:#f08a2c;--bad:#ff5d6c;--ok:#4fd1a5}
+:root[data-theme=light]{color-scheme:dark}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:radial-gradient(1200px 700px at 30% -10%,#1a2550 0,var(--bg) 60%) fixed,var(--bg);color:var(--ink);font:16px/1.55 Manrope,system-ui,sans-serif;overflow-x:clip;min-height:100vh}
+.band{padding:clamp(24px,4vw,56px) max(5vw,16px);max-width:1240px;margin:0 auto}
+h1{font:700 clamp(26px,4vw,40px)/1.05 Unbounded,sans-serif;margin:0 0 6px;text-wrap:balance}
+.sub{color:var(--mute);margin:0 0 28px;max-width:62ch}
+.wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:clamp(20px,3vw,40px);align-items:start}
+.board{background:linear-gradient(#0a0f20,#0a0f20) padding-box,linear-gradient(180deg,#5b7fb8,#1b2648 40%,#5b7fb8) border-box;border:3px solid transparent;border-radius:28px;padding:clamp(10px,2vw,18px);box-shadow:0 30px 60px -20px #000a,inset 0 0 40px #0006;width:100%;max-width:560px;margin:0 auto;overflow:hidden}
+.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(5,minmax(0,1fr));gap:clamp(5px,1.4vw,12px);aspect-ratio:1/1;width:100%}
+.cell{min-height:0;overflow:hidden;border-radius:14%;background:linear-gradient(160deg,#2bb3cc 0,var(--teal) 45%,var(--teal2) 100%);box-shadow:inset 0 2px 0 #ffffff40,inset 0 -4px 0 #0003,0 3px 6px #0007;display:grid;place-items:center;position:relative}
+.cell.on{background:transparent;box-shadow:none}
+.cell svg{position:absolute;inset:6%;width:88%;height:88%;filter:drop-shadow(0 3px 3px #0008)}
+.cell:not(.on) svg{display:none}
+.cell.on svg{animation:pop .35s cubic-bezier(.3,1.6,.5,1) both}
+.cell .n{position:absolute;top:4%;left:8%;font:700 11px Manrope,system-ui,sans-serif;color:#fff9;opacity:0}
+.cell.on .n{opacity:1;color:#fff}
+@keyframes pop{from{transform:scale(.2) rotate(-30deg);opacity:0}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){.cell:not(.on) svg{display:none}
+.cell.on svg{animation:none}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:clamp(16px,2.4vw,24px)}
+.lbl{font-weight:700;margin:0 0 10px;display:flex;justify-content:space-between;gap:8px}
+.lbl span{color:var(--mute);font-weight:600}
+.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:22px}
+.seg button,.go,.step{font:700 17px Manrope,system-ui,sans-serif;color:var(--ink);background:#1a2445;border:1px solid var(--line);border-radius:12px;min-height:48px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--or);border-color:var(--or);color:#1b0f02}
+.seg button:hover:not([aria-pressed=true]),.step:hover{background:#22305a}
+button:focus-visible,input:focus-visible{outline:3px solid #8fd8ff;outline-offset:2px}
+.cnt{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;gap:10px;align-items:center;margin-bottom:22px}
+.step{font-size:22px}
+input[type=range]{width:100%;accent-color:var(--teal);height:44px}
+.go{width:100%;background:linear-gradient(180deg,#ffa24a,var(--or));border:0;color:#1b0f02;font-size:18px;min-height:56px;box-shadow:0 8px 20px -8px #f08a2caa}
+.go:active{transform:translateY(1px)}
+.odds{display:flex;align-items:baseline;gap:12px;margin:22px 0 4px;flex-wrap:wrap}
+.big{font:700 clamp(36px,5vw,48px)/1 Unbounded,sans-serif;white-space:nowrap}
+.odds small{color:var(--mute)}
+.meter{height:10px;border-radius:6px;background:#0a0f20;overflow:hidden;margin:8px 0 6px}
+.meter i{display:block;height:100%;background:linear-gradient(90deg,var(--bad),var(--or),var(--ok));transition:width .3s}
+.mult{color:var(--mute);font-size:14px;margin:0}
+.mult b{color:var(--ink)}
+details{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+summary{cursor:pointer;font-weight:700;min-height:32px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+th,td{padding:6px 4px;text-align:right;border-bottom:1px solid #1d2a4d;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mute);font-weight:600}
+tr.cur td{color:var(--or);font-weight:700}
+.note{margin-top:28px;padding:16px 18px;border-radius:16px;background:#1a1530;border:1px solid #3a2c5c;color:#d6cdf0;font-size:15px;max-width:80ch}
+.note b{color:#fff}
+.hist{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.hist div{display:grid;grid-template-columns:repeat(5,8px);gap:2px;padding:6px;border-radius:8px;background:#0a0f20;border:1px solid var(--line)}
+.hist i{width:8px;height:8px;border-radius:2px;background:var(--teal2)}
+.hist i.s{background:var(--or)}
+.panel{position:relative;z-index:1}
+body.tg .band{padding-top:16px}
+body.tg h1{font-size:24px}
+@media(max-width:960px){.wrap{grid-template-columns:minmax(0,1fr)}.board{max-width:min(480px,100%)}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc06a"/><stop offset=".55" stop-color="#f5953a"/><stop offset="1" stop-color="#e2642a"/></linearGradient>
+    <linearGradient id="sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <symbol id="star" viewBox="0 0 100 100">
+      <path d="M50 6l12.6 27.4 29.9 3.4-22.3 20.3 6.2 29.5L50 71.6 23.6 86.6l6.2-29.5L7.5 36.8l29.9-3.4z" fill="url(#sg)" stroke="#c4471f" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M50 20l8.4 18.4 19.6 2.3-14.6 13.4 4 19.4L50 63.8 32.6 73.5l4-19.4L22 40.7l19.6-2.3z" fill="#fcb15e" opacity=".55"/>
+      <path d="M50 12l9 20-12 6-14-3z" fill="url(#sh)"/>
+    </symbol>
+  </defs>
+</svg>
+
+<main class="band">
+  <h1>Генератор клеток Mines</h1>
+  <p class="sub">Выберите число ловушек и сколько клеток открыть. Генератор отметит клетки случайно и покажет реальный шанс, что ни одна из них не окажется миной.</p>
+
+  <div class="wrap">
+    <div class="board"><div class="grid" id="grid"></div></div>
+
+    <div class="panel">
+      <p class="lbl">Ловушек на поле</p>
+      <div class="seg" id="seg">
+        <button type="button" data-m="1">1</button>
+        <button type="button" data-m="3" aria-pressed="true">3</button>
+        <button type="button" data-m="5">5</button>
+        <button type="button" data-m="7">7</button>
+      </div>
+
+      <p class="lbl"><label for="k">Клеток открыть</label><span id="kv">3</span></p>
+      <div class="cnt">
+        <button type="button" class="step" id="minus" aria-label="Меньше">−</button>
+        <input type="range" id="k" min="1" max="22" value="3">
+        <button type="button" class="step" id="plus" aria-label="Больше">+</button>
+      </div>
+
+      <button type="button" class="go" id="go">Сгенерировать</button>
+
+      <div class="odds"><span class="big" id="pct">—</span><small>шанс пройти все выбранные клетки</small></div>
+      <div class="meter"><i id="bar" style="width:0"></i></div>
+      <p class="mult">Честный множитель (без комиссии казино): <b id="fair">—</b></p>
+
+      <div class="hist" id="hist" aria-label="Последние генерации"></div>
+
+      <details>
+        <summary>Шанс для любого числа клеток</summary>
+        <table><thead><tr><th>Клеток</th><th>Шанс</th><th>Честный ×</th></tr></thead><tbody id="tb"></tbody></table>
+      </details>
+    </div>
+  </div>
+
+  <p class="note"><b>Важно:</b> это генератор случайных клеток, а не предсказатель. Мины расставляет сервер казино ещё до первого хода, и из браузера их не видно. Поэтому любая программа, которая обещает «угадать» мины, тоже выдаёт случайные клетки. Шанс выше посчитан точно; реальная выплата в игре меньше честного множителя на размер комиссии казино.</p>
+</main>
+
+<script>
+{
+  const N = 25;
+  const tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
+  if (tg && tg.platform && tg.platform !== 'unknown') {
+    document.body.classList.add('tg');
+    try { tg.ready(); tg.expand(); tg.setHeaderColor('#0d1224'); tg.setBackgroundColor('#0d1224'); } catch (e) {}
+  }
+  const grid = document.getElementById('grid');
+  const seg = document.getElementById('seg');
+  const k = document.getElementById('k');
+  const kv = document.getElementById('kv');
+  const pct = document.getElementById('pct');
+  const bar = document.getElementById('bar');
+  const fair = document.getElementById('fair');
+  const tb = document.getElementById('tb');
+  const hist = document.getElementById('hist');
+  let mines = 3;
+  let history = [];
+
+  const chance = (m, n) => { let p = 1; for (let i = 0; i < n; i++) p *= (N - m - i) / (N - i); return p; };
+  const fmtP = p => p >= 0.1 ? (p * 100).toFixed(1) + '%' : p >= 0.001 ? (p * 100).toFixed(2) + '%' : (p * 100).toExponential(1) + '%';
+  const fmtX = p => '×' + (1 / p < 100 ? (1 / p).toFixed(2) : Math.round(1 / p).toLocaleString('ru-RU'));
+
+  const rnd = n => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; };
+  const pick = n => { const a = [...Array(N).keys()]; for (let i = N - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
+
+  grid.innerHTML = Array.from({ length: N }, (_, i) => `<div class="cell" data-i="${i}"><span class="n"></span><svg hidden><use href="#star"/></svg></div>`).join('');
+  const cells = [...grid.children];
+
+  function clear() {
+    cells.forEach(c => { c.classList.remove('on'); c.querySelector('svg').hidden = true; c.querySelector('.n').textContent = ''; });
+  }
+
+  function update() {
+    const max = N - mines;
+    k.max = max;
+    if (+k.value > max) k.value = max;
+    const n = +k.value;
+    kv.textContent = n;
+    const p = chance(mines, n);
+    pct.textContent = fmtP(p);
+    bar.style.width = (p * 100) + '%';
+    fair.textContent = fmtX(p);
+    tb.innerHTML = Array.from({ length: max }, (_, i) => {
+      const q = chance(mines, i + 1);
+      return `<tr class="${i + 1 === n ? 'cur' : ''}"><td>${i + 1}</td><td>${fmtP(q)}</td><td>${fmtX(q)}</td></tr>`;
+    }).join('');
+    try { localStorage.setItem('mines-set', JSON.stringify({ mines, n })); } catch (e) {}
+  }
+
+  function generate() {
+    clear();
+    const sel = pick(+k.value);
+    sel.forEach((idx, order) => {
+      const c = cells[idx];
+      setTimeout(() => {
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        c.classList.add('on');
+        c.querySelector('svg').hidden = false;
+        c.querySelector('.n').textContent = order + 1;
+      }, order * 70);
+    });
+    history.unshift({ sel, mines });
+    history = history.slice(0, 8);
+    hist.innerHTML = history.map(h => `<div title="${h.mines} лов., ${h.sel.length} кл.">${Array.from({ length: N }, (_, i) => `<i class="${h.sel.includes(i) ? 's' : ''}"></i>`).join('')}</div>`).join('');
+  }
+
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    mines = +b.dataset.m;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    clear(); update();
+  });
+  k.addEventListener('input', () => { clear(); update(); });
+  document.getElementById('minus').addEventListener('click', () => { k.value = Math.max(1, +k.value - 1); clear(); update(); });
+  document.getElementById('plus').addEventListener('click', () => { k.value = Math.min(+k.max, +k.value + 1); clear(); update(); });
+  document.getElementById('go').addEventListener('click', generate);
+
+  try {
+    const s = JSON.parse(localStorage.getItem('mines-set') || 'null');
+    if (s && [1, 3, 5, 7].includes(s.mines)) {
+      mines = s.mines; k.value = s.n;
+      seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', +x.dataset.m === mines));
+    }
+  } catch (e) {}
+  update();
+  generate();
+}
+</script>
+</body>
+</html>
